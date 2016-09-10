@@ -1,0 +1,281 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv='X-UA-Compatible' content='IE=edge;chrome=1' />
+    <title>Jeff Lindsay, Open source hacker</title>
+    <link rel="alternate" type="application/atom+xml" title="Atom Feed" href="/blog/atom.xml" />
+    <link rel="shortcut icon" type="image/x-icon" href="/images/JeffLindsayDeluxe.png" />
+    <link href='https://fonts.googleapis.com/css?family=Dosis:400,300,700' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Roboto:400,300,700' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Roboto+Condensed:400,300,700|Lora:400,700,400italic|Vollkorn:400,700' rel='stylesheet' type='text/css'>
+    <link href="/stylesheets/all.css" rel="stylesheet" />
+    
+  </head>
+  <body>
+  <div id="wrapper">
+
+    <header>
+  <div class="container">
+  <div class="row">
+      <div class="col-lg-8 col-lg-offset-1">
+        You're reading the <a href="/blog">blog</a> of Jeff Lindsay (<a href="http://twitter.com/progrium">@progrium</a>). There is also his <a href="/wiki">wiki</a>.
+      </div>
+  </div>
+</div>
+</header>
+
+<main id="main" role="main">
+  <section>
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 col-lg-offset-1">
+          <article>
+            <div class="meta">
+                <div class="date">
+                    <span class="month">Jan</span>
+                    <span class="day">01</span>
+                    <span class="year">2013</span>
+                </div>
+            </div>
+            <h1><a href="/blog/2013/01/01/where-did-localtunnel-come-from/">Where did Localtunnel come from?</a></h1>
+            <p>Five years ago, async network programming scared me. I was a web developer. Working with the high level tools and frameworks of HTTP seemed much easier than any sort of serious low level networking. Especially since network programming would often also mean some kind of concurrent programming with threads or callbacks. I had mostly avoided multithreading and had no idea what an event loop was. I came from PHP.</p>
+
+<p>Around 2007, I was starting to think about webhooks. One motivator was how you could use webhooks to let web developers, like me, build systems that used other protocols without them having to work with that protocol. For example, one of my first projects with webhooks was called Mailhooks. I wanted to accept email in my application, but I didn't want to deal with email servers. I wanted to get an HTTP POST when an email came in with all the email fields nicely provided as POST parameters.</p>
+
+<p>This is how I started working with Twisted. Twisted became my main tool to build webhook adapters for existing protocols. I even tried to generalize that idea in a project called Protocol Droid. Slowly I started to grok, and not fear, this kind of programming.</p>
+
+<p>It's funny how my desire to work with abstractions that didn't exist yet to avoid a certain kind of programming was directly responsible for me eventually becoming an expert in that kind of programming.</p>
+
+<p>Then in late 2009, I had another idea while thinking about webhooks. It would be great if I could expose a local web server to the Internet with a friendly URL. It should just be a simple command. There would have to be a server, but there could just be a public server that you didn't even have to think about.</p>
+
+<p>I committed <a href="https://github.com/progrium/localtunnel/tree/prototype">the first prototype of Localtunnel</a> to Github in January 2010. It was written entirely in Twisted. It also didn't actually work. I really recommend taking a look because it was terrible. One of the challenges was multiplexing the HTTP requests into a single tunnel connection. My approach was so naive it just didn't work. As soon as you made more than one request at a time, it broke.</p>
+
+<p>A few months later, I decided to take a different approach. Instead of doing my own protocol, client, and server, I'd just make a wrapper around what I knew already worked: SSH tunneling. This was pretty quick to make happen, and that version is basically what's been in production to this day.</p>
+
+<p>This shortcut came with a lot of weird quirks. For example, the easiest way I found to implement an SSH tunnel client was a Ruby library, so I implemented the client in Ruby. The server, though, was in Python because I still only really knew Twisted for evented programming.</p>
+
+<p>Actually, using SSH was the source of most of the quirks and annoyances. I was pretty bothered that it slowed down the initial user experience by requiring a public key to be uploaded. But most of the pain was operational. The server, sshd, would create a process for every tunnel. Localtunnel also needed its own user and to pretty much own the SSH configuration for that machine. Then, on occasion, something weird would happen where a tunnel would die and the process would go crazy eating up CPU. It would have to be manually killed or it would eventually bring the server to a halt. And, eventually, the authorized_keys file would become enormous from all the keys uploaded.</p>
+
+<p>On top of all this, SSH is pretty opaque. It's been around for so long and used so much that it certainly just works … you just don't really know how. I still don't know how SSH does tunneling or what the protocol looks like, even after trying to read the RFC for it.</p>
+
+<p>By mid-2011, I was working at Twilio building distributed, real-time messaging systems at scale. I certainly came a long way from fearing async network programming. Localtunnel was still running the implementation based on SSH. By then it had quite a large user base and collected a number of bugs and feature requests. I also had my own operations and user experience wish list. With such a huge list of new requirements, so many problems with the current implementation, and a drastically different experience level and mindset, I decided to redesign Localtunnel from the ground up.</p>
+
+<p>Since I was pretty consumed by Twilio, I didn't have a lot of time to work on Localtunnel. I thought the biggest bang for buck in the long term would be to slowly work on the new version. They say software is never done, but I personally believe software can be finished. It just requires an aggressive drive for simplicity, and the <em>only</em> way you can make significant advances in simplicity is through redesign.</p>
+
+<p>In the meantime, users continued to experience issues with the current implementation. These problems only got worse as it became more popular. For example, the biggest issue was that the namespace for tunnel names was too small. Users would get requests from old tunnels, and in rare cases tunnel names would get pulled out from under you while using them. This created confusion and a lot of emails and issue tickets, but it still worked with the occasional restart.</p>
+
+<p>I've used this constant stream of complaints, which has been going on for almost two years, to make sure I keep making progress on the new version. In fact, I'm pretty sure I needed it because of my lifestyle of abundant projects.</p>
+
+<p>Last week I finally <a href="http://progrium.com/blog/2012/12/25/localtunnel-v2-available-in-beta/">released a beta of the new version</a>. What's interesting is that it's a completely different architecture from what I started out with for the redesign. After the original unreleased prototype, there's been 3 major approaches to implementation. In the coming weeks I'm going to share a more technical history of the architecture of Localtunnel, leading up to a deep exploration of what I hope will be its final form.</p>
+
+          </article>
+          <a href="/blog/2013/01/01/where-did-localtunnel-come-from/#disqus_thread">Comments</a>
+          <br /><br />
+        </div>
+
+        <div class="col-lg-3" id="sidebar">
+    <img src="https://dl.dropboxusercontent.com/u/2096290/Blog/progrium2016.png" id="photo" title="Jeff Lindsay" />
+    <p>
+        Jeff Lindsay is a design-minded software programmer living in Austin, Texas. 
+    </p>
+    <p>
+        He founded <a href="http://gliderlabs.com">Glider Labs</a>, an open source innovation lab.
+        There he writes <a href="http://gliderlabs.com/projects">open source developer infrastructure</a> 
+        to make the world more programmable.
+    </p>
+    <p><a href="/wiki/InfluenceAndAffiliations/">Learn more about Jeff.</a></p>
+    <h5>
+      <a rel="me" href="https://twitter.com/progrium"><i class="fa fa-twitter-square fa-2x"></i></a>
+      <a rel="me" href="https://github.com/progrium"><i class="fa fa-github fa-2x"></i></a>
+      <a ref="me" href="https://instagram.com/progrium"><i class="fa fa-instagram fa-2x"></i></a>
+      <a ref="me" href="https://vimeo.com/progrium"><i class="fa fa-vimeo-square fa-2x"></i></a>
+    </h5>
+</div>
+
+    </div>
+</div>
+</section>
+
+<section class="subscribe" style="padding: 20px 0;">
+  <div class="row">
+  <div class="col-lg-8 col-lg-offset-1">
+    <i class="fa fa-envelope"></i>
+    <a href="http://eepurl.com/bUo8Rb">Subscribe</a> to get future blog posts sent to you via email.
+  </div>
+  </div>
+</section>
+
+
+<section  class="alternate">
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 col-lg-offset-1">
+          <article>
+            <div class="meta">
+                <div class="date">
+                    <span class="month">Dec</span>
+                    <span class="day">25</span>
+                    <span class="year">2012</span>
+                </div>
+            </div>
+            <h1><a href="/blog/2012/12/25/localtunnel-v2-available-in-beta/">Localtunnel v2 available in beta</a></h1>
+            <p>A few years back, I released <a href="http://localtunnel.com">Localtunnel</a> to make it super easy to expose a local web server to the Internet for demos and debugging. Since then, it's gotten a ton of use. A few people even copied it and tried to make a paid service around the idea. Luckily, Localtunnel will always be free and open source.</p>
+
+<p>With the release of <a href="http://j.mp/localtunnel-v2">Localtunnel v2</a>, it will not only remain competitive with similar services, but continue to be the innovator of the group. I'll post more on this later.</p>
+
+<p>For now, let's talk logistics. The current, soon-to-be-legacy Localtunnel stack includes the client that you install with Rubygems, and a server that runs on a host at Rackspace. These will continue to be available into 2013, but will be marked as deprecated. This means you should be making the switch to v2.</p>
+
+<p>Besides the fact v1 will eventually be shutdown, there are a number of reasons to switch to v2. Here are some of the major ones:</p>
+
+<ul>
+  <li>It's actively maintained. Bug reports, pull requests, and service interruptions are dealt with promptly.</li>
+  <li>No more mysterious requests from old tunnels. The subdomain namespace is much larger.</li>
+  <li>Custom subdomains. The new client lets you pick a tunnel name on a first come, first served basis.</li>
+  <li>Supports long-polling, HTTP streaming, and WebSocket upgrades. Soon general TCP tunneling.</li>
+  <li>No SSH key to start using it. A minor annoyance setting up v1, but it doesn't exist in v2.</li>
+</ul>
+
+<p>One implementation detail that affects users is that the client is now written in Python. This means you won't use Rubygems to install it. Instead, you can use <code>easy_install</code> or <code>pip</code>.</p>
+
+<pre class="highlight plaintext"><code>$ easy_install localtunnel
+</code></pre>
+
+<p>On some systems, you may need to run this with <code>sudo</code>. If you don't have <code>easy_install</code>, first make sure you have Python installed:</p>
+
+<pre class="highlight plaintext"><code>$ python --version
+</code></pre>
+
+<p>Localtunnel requires Python 2.6 or later, which comes standard on most systems. If you don't have Python, you can <a href="http://wiki.python.org/moin/BeginnersGuide/Download">install it for your platform</a>. If <code>easy_install</code> isn't available after you install Python, you can install it with this bootstrap script:</p>
+
+<pre class="highlight plaintext"><code>$ curl http://peak.telecommunity.com/dist/ez_setup.py | python
+</code></pre>
+
+<p>Once you've installed Localtunnel with <code>easy_install</code>, it will be available as <code>localtunnel-beta</code>. This lets you keep the old client to use in case anything goes wrong with v2 during the beta. Eventually, it will be installed as <code>localtunnel</code>, but only after v1 is shutdown.</p>
+
+<p>Using <code>localtunnel-beta</code> is pretty much the same as before:</p>
+
+<pre class="highlight plaintext"><code>$ localtunnel-beta 8000
+  Thanks for trying localtunnel v2 beta!
+
+  Port 8000 is now accessible from http://fb0322605126.v2.localtunnel.com ...
+</code></pre>
+
+<p>Like I mentioned earlier, you can use a custom tunnel name if it's not being used:</p>
+
+<pre class="highlight plaintext"><code>$ localtunnel-beta -n foobar 8000
+  Thanks for trying localtunnel v2 beta!
+
+  Port 8000 is now accessible from http://foobar.v2.localtunnel.com ...
+</code></pre>
+
+<p>Keep in mind v2 is in active development. There might be some downtime while I work out operational bugs, but you can always use the old version if you run into problems.</p>
+
+<p>If you do run into any problems, you can <a href="http://twitter.com/progrium">ping me on Twitter</a>. If you get traceback you can <a href="https://github.com/progrium/localtunnel/issues">create an issue on Github</a>. If you have more in-depth questions or want to get involved in development, check out the <a href="https://groups.google.com/forum/#!forum/localtunnel">Localtunnel Google Group</a>.</p>
+
+
+          </article>
+          <a href="/blog/2012/12/25/localtunnel-v2-available-in-beta/#disqus_thread">Comments</a>
+        </div>
+    </div>
+</div>
+</section>
+<section >
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 col-lg-offset-1">
+          <article>
+            <div class="meta">
+                <div class="date">
+                    <span class="month">Dec</span>
+                    <span class="day">17</span>
+                    <span class="year">2012</span>
+                </div>
+            </div>
+            <h1><a href="/blog/2012/12/17/http-signatures-with-content-hmac/">HTTP Signatures with Content-HMAC</a></h1>
+            <p>Today I wanted to propose another header. It would be used for signing HTTP content with HMAC, and is appropriately called Content-HMAC. In <a href="http://progrium.com/blog/2012/11/26/x-callback-header-an-evented-web-building-block/">a previous post</a> about the Callback header, I mentioned using an X-Signature header in callback requests to sign the payload of the callback. It looked like this:</p>
+
+<pre class="highlight plaintext"><code>X-Signature: sha1=&lt;hexdigest of sha1 hmac&gt;
+</code></pre>
+
+<p>The HMAC would be built with just the content of the request (i.e., no headers, no query params) and a secret key. <a href="http://pubsubhubbub.googlecode.com/svn/trunk/pubsubhubbub-core-0.3.html#authednotify">This was borrowed directly from the PubSubHubbub spec</a>, but the general idea of using HMAC to sign callback requests has become pretty standard in the world of webhooks. Here are details on how <a href="http://code.google.com/p/support/wiki/PostCommitWebHooks#Authentication">Google</a> and <a href="http://www.twilio.com/docs/security#validating-requests">Twilio</a> use them.</p>
+
+<p>Each of these providers is using their own header for basically the same use case. It would seem like there is an opportunity to standardize on a common header format for it. There's been a number of proposals for a general Signature header to sign an entire request. There was a fairly comprehensive one proposed called <a href="http://tools.ietf.org/html/draft-burke-content-signature-00">Content-Signature</a>. With signing, the difficulty is often getting the input string correct. Most signing mechanisms need to normalize their input. If you've ever had to deal with OAuth or AWS signatures, you'll know what I'm talking about. With request signing, the headers pose a particularly tricky situation with signing since they often change as the request goes through proxies.</p>
+
+<p>The idea of Content-HMAC is to focus on a simpler goal of signing just the content payload, since it's normally treated as-is, and is not altered when going through proxies. The X-Signature proposal I had was a decent one, as is almost any cowpath-based proposal, but I realized it would probably be a good idea to limit the implied scope to what it's really doing: providing an HMAC for request (or response) content.</p>
+
+<p>It turns out there's a similar header that's not used that often anymore called Content-MD5. It was a simple mechanism to provide an MD5 digest of the content. My current proposal is to take this existing pattern and apply it to HMAC, giving us the Content-HMAC header:</p>
+
+<pre class="highlight plaintext"><code>Content-HMAC: &lt;hash mechanism&gt; &lt;base64 encoded binary HMAC&gt;
+</code></pre>
+
+<p>Here's an example:</p>
+
+<pre class="highlight plaintext"><code>Content-HMAC: sha1 f1wOnLLwcTexwCSRCNXEAKPDm+U=
+</code></pre>
+
+<p>This proposal borrows its naming convention from Content-MD5, but the format is more similar to Authorization. The Authorization header allows multiple authorization schemes to be used. You define the scheme followed by a space and then the actual authorization data. Since HMAC allows different hashing techniques to be used, we use that pattern here to let you specify the hashing technique. We also take the existing pattern of base64 encoding used in several HTTP headers to make it conform even more to existing standards.</p>
+
+<p>Content-HMAC was created for callback requests, but it's a useful way to sign any HTTP request or response payload. For requests, it's worth mentioning it only applies when there is a content payload, so for example it's meaningless with GET requests.</p>
+
+<p>It's also very worth mentioning that the need for content signing is unnecessary when using HTTPS. It currently looks like the future will eventually be 100% SSL encrypted HTTP, but until then, there will always be situations where HTTPS is not available. Content-HMAC is perhaps a stop-gap until we reach that ideal. Until then, I think Content-HMAC is a good, standard way to add authorization to callback requests.</p>
+
+<p>Let me know if you have any questions or feedback on this proposal. Further discussion is likely to happen on the <a href="https://groups.google.com/forum/#!forum/webhooks">Webhooks Google Group</a>.</p>
+
+          </article>
+          <a href="/blog/2012/12/17/http-signatures-with-content-hmac/#disqus_thread">Comments</a>
+        </div>
+    </div>
+</div>
+</section>
+
+
+<section class="alternate">
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+        <ul class="pager article">
+          <li class="previous">
+            <a href="/blog/page7/">&larr; Older</a>
+          </li>
+
+          <li class="next">
+            <a href="/blog/page5/">Newer &rarr;</a>
+          </li>
+        </ul>
+        </div>
+    </div>
+</div>
+</section>
+
+</main>
+
+
+
+    <footer>
+      <div class="container clearfix">
+        &copy; 2016 Jeff Lindsay
+      </div>
+    </footer>
+
+  </div>
+  <script src="/javascripts/all.js"></script>
+  <script type="text/javascript">
+        var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+        document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+        </script>
+        <script type="text/javascript">
+        try {
+        var pageTracker = _gat._getTracker("UA-6824126-1");
+        pageTracker._trackPageview();
+        } catch(err) {}</script>
+    <!--script type="text/javascript">
+      var host = "progrium.com";
+      if ((host == window.location.host) && (window.location.protocol != "https:"))
+        window.location.protocol = "https";
+    </script-->
+    <script type="text/javascript">
+      
+    </script>
+  </body>
+</html>
